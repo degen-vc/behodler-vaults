@@ -4,13 +4,11 @@ const deployUniswap = require('./helpers/deployUniswap');
 const { expectEvent, expectRevert, constants } = require("@openzeppelin/test-helpers");
 const { web3 } = require('@openzeppelin/test-helpers/src/setup');
 
-const OptionsMarketToken = artifacts.require('OptionsMarketToken');
+const MockToken = artifacts.require('ERC20Mock');
+// const EyeToken = artifacts.require('Eye');
+// const ScarcityToken = artifacts.require('Scarcity.sol');
 const AcceleratorVault = artifacts.require('AcceleratorVault');
 const IUniswapV2Pair = artifacts.require('IUniswapV2Pair');
-const PriceOracle = artifacts.require('PriceOracle');
-
-const bn = (input) => web3.utils.toBN(input)
-const assertBNequal = (bnOne, bnTwo) => assert.equal(bnOne.toString(), bnTwo.toString())
 
 
 contract('Accelerator vault', function(accounts) {
@@ -35,7 +33,7 @@ contract('Accelerator vault', function(accounts) {
   let uniswapRouter;
   let weth;
 
-  let osmToken;
+  let eyeToken, scarcityToken;
   let acceleratorVault;
 
   before('setup others', async function() {
@@ -45,24 +43,22 @@ contract('Accelerator vault', function(accounts) {
     weth = contracts.weth;
 
     // deploy and setup main contracts
-    osmToken = await OptionsMarketToken.new(OWNER);
+    eyeToken = await MockToken.new("Behodler.io", "EYE", bn('10000000').mul(baseUnit));
+    scarcityToken = await MockToken.new("Scarcity", "SCX", bn('10000000').mul(baseUnit));
     acceleratorVault = await AcceleratorVault.new();
 
-    await uniswapFactory.createPair(weth.address, osmToken.address);
-    uniswapPair = await uniswapFactory.getPair.call(weth.address, osmToken.address);
-
-
-    uniswapOracle = await PriceOracle.new(uniswapPair, osmToken.address, weth.address);
+    await uniswapFactory.createPair(eyeToken.address, scarcityToken.address);
+    uniswapPair = await uniswapFactory.getPair.call(eyeToken.address, scarcityToken.address);
 
     await acceleratorVault.seed(
       stakeDuration,
-      osmToken.address,
+      scarcityToken.address,
+      eyeToken.address,
       uniswapPair,
       uniswapRouter.address,
       HODLER_VAULT_FAKE,
       donationShare,
-      purchaseFee,
-      uniswapOracle.address
+      purchaseFee
     );
 
     await ganache.snapshot();
@@ -71,30 +67,14 @@ contract('Accelerator vault', function(accounts) {
   describe('General tests', async () => {
     it('should set all values after AV setup', async () => {
       const config = await acceleratorVault.config();
-      assert.equal(config.osmToken, osmToken.address);
+      assert.equal(config.scxToken, scarcityToken.address);
+      assert.equal(config.eyeToken, eyeToken.address);
       assert.equal(config.tokenPair, uniswapPair);
       assert.equal(config.uniswapRouter, uniswapRouter.address);
-      assert.equal(config.ethHodler, HODLER_VAULT_FAKE);
-      assert.equal(config.weth, weth.address);
-      assert.equal(config.uniswapOracle, uniswapOracle.address);
+      assert.equal(config.feeHodler, HODLER_VAULT_FAKE);
       assertBNequal(config.stakeDuration, 86400);
       assertBNequal(config.donationShare, donationShare);
       assertBNequal(config.purchaseFee, purchaseFee);
-    });
-
-    it('should not set an oracle from non-owner', async () => {
-      await expectRevert(
-        acceleratorVault.setOracleAddress(uniswapOracle.address, { from: NOT_OWNER }),
-        'Ownable: caller is not the owner'
-      );
-    });
-
-    it('should set new oracle', async () => {
-      const FAKE_ORACLE = accounts[3];
-      await acceleratorVault.setOracleAddress(FAKE_ORACLE);
-      const { uniswapOracle } = await acceleratorVault.config();
-
-      assert.equal(uniswapOracle, FAKE_ORACLE);
     });
 
     it('should not set parameters from non-owner', async () => {
@@ -136,73 +116,79 @@ contract('Accelerator vault', function(accounts) {
       const NEW_HODLER = accounts[3];
 
       await expectRevert(
-        acceleratorVault.setEthHodlerAddress(NEW_HODLER, { from: NOT_OWNER }),
+        acceleratorVault.setFeeHodlerAddress(NEW_HODLER, { from: NOT_OWNER }),
         'Ownable: caller is not the owner'
       );
     });
 
     it('should set hodler\'s address', async () => {
       const NEW_HODLER = accounts[3];
-      await acceleratorVault.setEthHodlerAddress(NEW_HODLER);
-      const { ethHodler } = await acceleratorVault.config();
+      await acceleratorVault.setFeeHodlerAddress(NEW_HODLER);
+      const { feeHodler } = await acceleratorVault.config();
 
-      assert.equal(ethHodler, NEW_HODLER);
+      assert.equal(feeHodler, NEW_HODLER);
     });
   });
 
   describe('PurchaseLP tests', async () => {
-    it('should not purchase LP with 0 ETH', async () => {
+    it('should not purchase LP with 0 SCX', async () => {
       await expectRevert(
-        acceleratorVault.purchaseLP(),
-        'AcceleratorVault: ETH required to mint OSM LP'
+        acceleratorVault.purchaseLP(0),
+        'AcceleratorVault: SCX required to mint LP'
       );
     });
 
-    it('should not purchase LP with no OSM tokens in Vault', async () => {
-      const liquidityTokensAmount = bn('10000').mul(baseUnit); // 10.000 tokens
-      const liquidityEtherAmount = bn('5').mul(baseUnit); // 5 ETH
-      const purchaseValue = bn('1').mul(baseUnit); // 1 ETH
+    it('should not purchase LP with no EYE tokens in Vault', async () => {
+      const liquidityEyeAmount = bn('10000').mul(baseUnit); // 10.000 tokens
+      const liquidityScxAmount = bn('500').mul(baseUnit); // 500 SCX
+      const purchaseValue = bn('10').mul(baseUnit); // 10 SCX
 
-      await osmToken.approve(uniswapRouter.address, liquidityTokensAmount);
-      await uniswapRouter.addLiquidityETH(
-        osmToken.address,
-        liquidityTokensAmount,
+      await eyeToken.approve(uniswapRouter.address, liquidityEyeAmount);
+      await scarcityToken.approve(uniswapRouter.address, liquidityScxAmount);
+      await uniswapRouter.addLiquidity(
+        eyeToken.address,
+        scarcityToken.address,
+        liquidityEyeAmount,
+        liquidityScxAmount,
         0,
         0,
         NOT_OWNER,
-        new Date().getTime() + 3000,
-        {value: liquidityEtherAmount}
+        new Date().getTime() + 3000
       );
 
+      await scarcityToken.approve(acceleratorVault.address, bn(-1));
       await expectRevert(
-        acceleratorVault.purchaseLP({ value: purchaseValue }),
-        'AcceleratorVault: insufficient OSM tokens in AcceleratorVault'
+        acceleratorVault.purchaseLP(purchaseValue),
+        'AcceleratorVault: insufficient EYE tokens in AcceleratorVault'
       );
     });
 
     it('should purchase LP for 1 ETH', async () => {
-      const liquidityTokensAmount = bn('10000').mul(baseUnit); // 10.000 tokens
-      const liquidityEtherAmount = bn('5').mul(baseUnit); // 5 ETH
+      const liquidityEyeAmount = bn('10000').mul(baseUnit); // 10.000 tokens
+      const liquidityScxAmount = bn('500').mul(baseUnit); // 500 SCX
       const transferToAccelerator = bn('20000').mul(baseUnit); // 20.000 tokens
-      const purchaseValue = bn('1').mul(baseUnit); // 1 ETH
+      const purchaseValue = bn('10').mul(baseUnit); // 10 SCX
 
-      await osmToken.approve(uniswapRouter.address, liquidityTokensAmount);
-      await uniswapRouter.addLiquidityETH(
-        osmToken.address,
-        liquidityTokensAmount,
+      await eyeToken.approve(uniswapRouter.address, liquidityEyeAmount);
+      await scarcityToken.approve(uniswapRouter.address, liquidityScxAmount);
+      await uniswapRouter.addLiquidity(
+        eyeToken.address,
+        scarcityToken.address,
+        liquidityEyeAmount,
+        liquidityScxAmount,
         0,
         0,
         NOT_OWNER,
-        new Date().getTime() + 3000,
-        {value: liquidityEtherAmount}
+        new Date().getTime() + 3000
       );
 
-      await osmToken.transfer(acceleratorVault.address, transferToAccelerator);
-      const vaultBalance = await osmToken.balanceOf(acceleratorVault.address);
+      await eyeToken.transfer(acceleratorVault.address, transferToAccelerator);
+      const vaultBalance = await eyeToken.balanceOf(acceleratorVault.address);
       assertBNequal(vaultBalance, transferToAccelerator);
       
-      const hodlerBalanceBefore = bn(await web3.eth.getBalance(HODLER_VAULT_FAKE));
-      const purchaseLP = await acceleratorVault.purchaseLP({ value: purchaseValue });
+      const hodlerBalanceBefore = bn(await scarcityToken.balanceOf(HODLER_VAULT_FAKE));
+      await scarcityToken.approve(acceleratorVault.address, bn(-1));
+      const purchaseLP = await acceleratorVault.purchaseLP(purchaseValue);
       const lockedLpLength = await acceleratorVault.lockedLPLength(OWNER);
       assertBNequal(lockedLpLength, 1);
 
@@ -212,42 +198,45 @@ contract('Accelerator vault', function(accounts) {
       assertBNequal(lockedLP[1], amount);
       assertBNequal(lockedLP[2], timestamp);
 
-      const { ethHodler } = await acceleratorVault.config();
+      const { feeHodler } = await acceleratorVault.config();
       const { to, percentageAmount } = purchaseLP.logs[1].args;
       const estimatedHodlerAmount = (purchaseValue * purchaseFee) / 100;
-      const hodlerBalanceAfter = bn(await web3.eth.getBalance(HODLER_VAULT_FAKE));
+      const hodlerBalanceAfter = bn(await scarcityToken.balanceOf(HODLER_VAULT_FAKE));
       
-      assert.equal(ethHodler, HODLER_VAULT_FAKE);
-      assert.equal(ethHodler, to);
+      assert.equal(feeHodler, HODLER_VAULT_FAKE);
+      assert.equal(feeHodler, to);
       assertBNequal(hodlerBalanceAfter.sub(hodlerBalanceBefore), estimatedHodlerAmount);
       assertBNequal(estimatedHodlerAmount, percentageAmount);
 
     });
 
-    it('should not purchase LP with too much ETH', async () => {
-      const liquidityTokensAmount = bn('10000').mul(baseUnit); // 10.000 tokens
-      const liquidityEtherAmount = bn('5').mul(baseUnit); // 5 ETH
-      const transferToAccelerator = bn('200').mul(baseUnit); // 200 tokens
-      const purchaseValue = bn('10').mul(baseUnit); // 1 ETH
+    it('should not purchase LP with too much SCX', async () => {
+      const liquidityEyeAmount = bn('10000').mul(baseUnit); // 10.000 tokens
+      const liquidityScxAmount = bn('500').mul(baseUnit); // 500 SCX
+      const transferToAccelerator = bn('20').mul(baseUnit); // 20 tokens
+      const purchaseValue = bn('1000').mul(baseUnit); // 1000 SCX
 
-      await osmToken.approve(uniswapRouter.address, liquidityTokensAmount);
-      await uniswapRouter.addLiquidityETH(
-        osmToken.address,
-        liquidityTokensAmount,
+      await eyeToken.approve(uniswapRouter.address, liquidityEyeAmount);
+      await scarcityToken.approve(uniswapRouter.address, liquidityScxAmount);
+      await uniswapRouter.addLiquidity(
+        eyeToken.address,
+        scarcityToken.address,
+        liquidityEyeAmount,
+        liquidityScxAmount,
         0,
         0,
         NOT_OWNER,
-        new Date().getTime() + 3000,
-        {value: liquidityEtherAmount}
+        new Date().getTime() + 3000
       );
 
-      await osmToken.transfer(acceleratorVault.address, transferToAccelerator);
-      const vaultBalance = await osmToken.balanceOf(acceleratorVault.address);
+      await eyeToken.transfer(acceleratorVault.address, transferToAccelerator);
+      const vaultBalance = await eyeToken.balanceOf(acceleratorVault.address);
       assertBNequal(vaultBalance, transferToAccelerator);
 
+      await scarcityToken.approve(acceleratorVault.address, bn(-1));
       await expectRevert(
-        acceleratorVault.purchaseLP({ value: purchaseValue }),
-        'AcceleratorVault: insufficient OSM tokens in AcceleratorVault'
+        acceleratorVault.purchaseLP(purchaseValue),
+        'AcceleratorVault: insufficient EYE tokens in AcceleratorVault'
       );
     });
   });
@@ -261,24 +250,27 @@ contract('Accelerator vault', function(accounts) {
     });
 
     it('should not be able to claim if LP is still locked', async () => {
-      const liquidityTokensAmount = bn('10000').mul(baseUnit); // 10.000 tokens
-      const liquidityEtherAmount = bn('5').mul(baseUnit); // 5 ETH
+      const liquidityEyeAmount = bn('10000').mul(baseUnit); // 10.000 tokens
+      const liquidityScxAmount = bn('500').mul(baseUnit); // 500 SCX
       const transferToAccelerator = bn('20000').mul(baseUnit); // 20.000 tokens
-      const purchaseValue = bn('1').mul(baseUnit); // 1 ETH
+      const purchaseValue = bn('10').mul(baseUnit); // 10 SCX
 
-      await osmToken.approve(uniswapRouter.address, liquidityTokensAmount);
-      await uniswapRouter.addLiquidityETH(
-        osmToken.address,
-        liquidityTokensAmount,
+      await eyeToken.approve(uniswapRouter.address, liquidityEyeAmount);
+      await scarcityToken.approve(uniswapRouter.address, liquidityScxAmount);
+      await uniswapRouter.addLiquidity(
+        eyeToken.address,
+        scarcityToken.address,
+        liquidityEyeAmount,
+        liquidityScxAmount,
         0,
         0,
         NOT_OWNER,
-        new Date().getTime() + 3000,
-        {value: liquidityEtherAmount}
+        new Date().getTime() + 3000
       );
 
-      await osmToken.transfer(acceleratorVault.address, transferToAccelerator);
-      await acceleratorVault.purchaseLP({ value: purchaseValue });
+      await eyeToken.transfer(acceleratorVault.address, transferToAccelerator);
+      await scarcityToken.approve(acceleratorVault.address, bn(-1));
+      await acceleratorVault.purchaseLP(purchaseValue);
 
       await expectRevert(
         acceleratorVault.claimLP(),
@@ -287,26 +279,29 @@ contract('Accelerator vault', function(accounts) {
     });
 
     it('should be able to claim 1 batch after 1 purchase', async () => {
-      const liquidityTokensAmount = bn('10000').mul(baseUnit); // 10.000 tokens
-      const liquidityEtherAmount = bn('5').mul(baseUnit); // 5 ETH
+      const liquidityEyeAmount = bn('10000').mul(baseUnit); // 10.000 tokens
+      const liquidityScxAmount = bn('500').mul(baseUnit); // 500 SCX
       const transferToAccelerator = bn('20000').mul(baseUnit); // 20.000 tokens
-      const purchaseValue = bn('1').mul(baseUnit); // 1 ETH
+      const purchaseValue = bn('10').mul(baseUnit); // 10 SCX
       const pair = await IUniswapV2Pair.at(uniswapPair);
 
-      await osmToken.approve(uniswapRouter.address, liquidityTokensAmount);
-      await uniswapRouter.addLiquidityETH(
-        osmToken.address,
-        liquidityTokensAmount,
+      await eyeToken.approve(uniswapRouter.address, liquidityEyeAmount);
+      await scarcityToken.approve(uniswapRouter.address, liquidityScxAmount);
+      await uniswapRouter.addLiquidity(
+        eyeToken.address,
+        scarcityToken.address,
+        liquidityEyeAmount,
+        liquidityScxAmount,
         0,
         0,
         NOT_OWNER,
-        new Date().getTime() + 3000,
-        {value: liquidityEtherAmount}
+        new Date().getTime() + 3000
       );
 
       ganache.setTime(startTime);
-      await osmToken.transfer(acceleratorVault.address, transferToAccelerator);
-      await acceleratorVault.purchaseLP({ value: purchaseValue });
+      await eyeToken.transfer(acceleratorVault.address, transferToAccelerator);
+      await scarcityToken.approve(acceleratorVault.address, bn(-1));
+      await acceleratorVault.purchaseLP(purchaseValue);
       const lockedLP = await acceleratorVault.getLockedLP(OWNER, 0);
       const { donationShare } = await acceleratorVault.config();
       const stakeDuration = await acceleratorVault.getStakeDuration();
@@ -326,30 +321,34 @@ contract('Accelerator vault', function(accounts) {
     });
 
     it('should be able to claim 2 batches after 2 purchases and 1 3rd party purchase', async () => {
-      const liquidityTokensAmount = bn('10000').mul(baseUnit); // 10.000 tokens
-      const liquidityEtherAmount = bn('5').mul(baseUnit); // 5 ETH
+      const liquidityEyeAmount = bn('10000').mul(baseUnit); // 10.000 tokens
+      const liquidityScxAmount = bn('500').mul(baseUnit); // 500 SCX
       const transferToAccelerator = bn('20000').mul(baseUnit); // 20.000 tokens
-      const purchaseValue = bn('1').mul(baseUnit); // 1 ETH
+      const purchaseValue = bn('10').mul(baseUnit); // 10 SCX
       const pair = await IUniswapV2Pair.at(uniswapPair);
 
-      await osmToken.approve(uniswapRouter.address, liquidityTokensAmount);
-      await uniswapRouter.addLiquidityETH(
-        osmToken.address,
-        liquidityTokensAmount,
+      await eyeToken.approve(uniswapRouter.address, liquidityEyeAmount);
+      await scarcityToken.approve(uniswapRouter.address, liquidityScxAmount);
+      await uniswapRouter.addLiquidity(
+        eyeToken.address,
+        scarcityToken.address,
+        liquidityEyeAmount,
+        liquidityScxAmount,
         0,
         0,
         NOT_OWNER,
-        new Date().getTime() + 3000,
-        {value: liquidityEtherAmount}
+        new Date().getTime() + 3000
       );
 
       ganache.setTime(startTime);
-      await osmToken.transfer(acceleratorVault.address, transferToAccelerator);
-      
-      await acceleratorVault.purchaseLP({ value: purchaseValue });
-      await acceleratorVault.purchaseLP({ value: purchaseValue });
+      await eyeToken.transfer(acceleratorVault.address, transferToAccelerator);
+      await scarcityToken.approve(acceleratorVault.address, bn(-1));
+      await acceleratorVault.purchaseLP(purchaseValue);
+      await acceleratorVault.purchaseLP(purchaseValue);
 
-      await acceleratorVault.purchaseLP({ value: purchaseValue, from: NOT_OWNER });
+      await scarcityToken.transfer(NOT_OWNER, purchaseValue);
+      await scarcityToken.approve(acceleratorVault.address, bn(-1), { from: NOT_OWNER });
+      await acceleratorVault.purchaseLP(purchaseValue, { from: NOT_OWNER });
 
       assertBNequal(await acceleratorVault.lockedLPLength(OWNER), 2);
       assertBNequal(await acceleratorVault.lockedLPLength(NOT_OWNER), 1);
@@ -393,28 +392,31 @@ contract('Accelerator vault', function(accounts) {
     });
 
     it('should be able to claim LP after force unlock', async () => {
-      const liquidityTokensAmount = bn('10000').mul(baseUnit); // 10.000 tokens
-      const liquidityEtherAmount = bn('5').mul(baseUnit); // 5 ETH
+      const liquidityEyeAmount = bn('10000').mul(baseUnit); // 10.000 tokens
+      const liquidityScxAmount = bn('500').mul(baseUnit); // 500 SCX
       const transferToAccelerator = bn('20000').mul(baseUnit); // 20.000 tokens
-      const purchaseValue = bn('1').mul(baseUnit); // 1 ETH
+      const purchaseValue = bn('10').mul(baseUnit); // 10 SCX
       const pair = await IUniswapV2Pair.at(uniswapPair);
 
-      await osmToken.approve(uniswapRouter.address, liquidityTokensAmount);
-      await uniswapRouter.addLiquidityETH(
-        osmToken.address,
-        liquidityTokensAmount,
+      await eyeToken.approve(uniswapRouter.address, liquidityEyeAmount);
+      await scarcityToken.approve(uniswapRouter.address, liquidityScxAmount);
+      await uniswapRouter.addLiquidity(
+        eyeToken.address,
+        scarcityToken.address,
+        liquidityEyeAmount,
+        liquidityScxAmount,
         0,
         0,
         NOT_OWNER,
-        new Date().getTime() + 3000,
-        {value: liquidityEtherAmount}
+        new Date().getTime() + 3000
       );
 
       ganache.setTime(startTime);
-      await osmToken.transfer(acceleratorVault.address, transferToAccelerator);
+      await eyeToken.transfer(acceleratorVault.address, transferToAccelerator);
+      await scarcityToken.approve(acceleratorVault.address, bn(-1));
       
-      await acceleratorVault.purchaseLP({ value: purchaseValue });
-      await acceleratorVault.purchaseLP({ value: purchaseValue });
+      await acceleratorVault.purchaseLP(purchaseValue);
+      await acceleratorVault.purchaseLP(purchaseValue);
 
       const lockedLP1 = await acceleratorVault.getLockedLP(OWNER, 0);
       const lockedLP2 = await acceleratorVault.getLockedLP(OWNER, 1);

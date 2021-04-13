@@ -120,7 +120,7 @@ contract AcceleratorVault is Ownable {
     }
 
     function purchaseLPFor(address beneficiary, uint amount) public lock {
-        require(amount > 0, "AcceleratorVault: ETH required to mint SCX / EYE LP");
+        require(amount > 0, "AcceleratorVault: SCX required to mint LP");
         require(config.scxToken.balanceOf(msg.sender) >= amount, "AcceleratorVault: Not enough SCX tokens");
         require(config.scxToken.allowance(msg.sender, address(this)) >= amount, "AcceleratorVault: Not enough SCX tokens allowance");
 
@@ -153,14 +153,14 @@ contract AcceleratorVault is Ownable {
 
         // IWETH(config.weth).deposit{ value: exchangeValue }();
         address tokenPairAddress = address(config.tokenPair);
-        config.eyeToken.transfer(tokenPairAddress, exchangeValue);
+        config.eyeToken.transfer(tokenPairAddress, eyeRequired);
         config.scxToken.transferFrom(
             msg.sender,
             tokenPairAddress,
-            eyeRequired
+            exchangeValue
         );
         //ETH receiver is hodler vault here
-        config.scxToken.transfer(config.feeHodler, feeValue);
+        config.scxToken.transferFrom(msg.sender, config.feeHodler, feeValue);
 
         uint liquidityCreated = config.tokenPair.mint(address(this));
 
