@@ -1,7 +1,7 @@
 require('dotenv').config();
 
 const EyeVault = artifacts.require('EyeVault');
-const HodlerVault = artifacts.require('HodlerVault');
+const ScarcityVault = artifacts.require('ScarcityVault');
 const UniswapFactory = artifacts.require('UniswapFactory');
 const Eye = artifacts.require('ERC20Mock');
 const Scarcity = artifacts.require('ERC20Mock');
@@ -25,9 +25,9 @@ module.exports = async (deployer, network, accounts) => {
   const eyeVault = await EyeVault.deployed();
   pausePromise('EyeVault');
 
-  await deployer.deploy(HodlerVault);
-  const hodlerVault = await HodlerVault.deployed();
-  pausePromise('HodlerVault');
+  await deployer.deploy(ScarcityVault);
+  const scarcityVault = await ScarcityVault.deployed();
+  pausePromise('ScarcityVault');
 
   await deployer.deploy(Eye, 'Behodler.io', 'EYE', totalSupply);
   const eyeToken = await Eye.deployed();
@@ -50,17 +50,20 @@ module.exports = async (deployer, network, accounts) => {
       eyeToken.address, 
       uniswapPair, 
       UNISWAP_ROUTER, 
-      hodlerVault.address,
+      scarcityVault.address,
       donationShare,
       purchaseFee
     );
 
-    await hodlerVault.seed(
-      stakeDuration,
+    await scarcityVault.seed(
+      stakeDuration, 
       scxToken.address,
-      eyeToken.address,
-      uniswapPair,
-      UNISWAP_ROUTER
+      eyeToken.address, 
+      uniswapPair, 
+      UNISWAP_ROUTER, 
+      eyeVault.address,
+      donationShare,
+      purchaseFee
     );
   }
   

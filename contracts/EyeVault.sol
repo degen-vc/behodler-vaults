@@ -33,7 +33,6 @@ contract EyeVault is Ownable {
     );
 
     struct LPbatch {
-        address holder; // remove?
         uint amount;
         uint timestamp;
         bool claimed;
@@ -83,19 +82,32 @@ contract EyeVault is Ownable {
         setParameters(duration, donationShare, purchaseFee);
     }
 
-    function getStakeDuration() public view returns (uint) {
-        return forceUnlock ? 0 : config.stakeDuration;
+    function getLockedLP(address holder, uint position)
+        public
+        view
+        returns (
+            address,
+            uint,
+            uint,
+            bool
+        )
+    {
+        LPbatch memory batch = lockedLP[holder][position];
+        return (holder, batch.amount, batch.timestamp, batch.claimed);
     }
 
-    // Could not be canceled if activated
-    function enableLPForceUnlock() public onlyOwner {
-        forceUnlock = true;
+    function lockedLPLength(address holder) public view returns (uint) {
+        return lockedLP[holder].length;
+    }
+
+    function getStakeDuration() public view returns (uint) {
+        return forceUnlock ? 0 : config.stakeDuration;
     }
 
     function setFeeHodlerAddress(address feeHodler) public onlyOwner {
         require(
             feeHodler != address(0),
-            "EyeVault: eth receiver is zero address"
+            "EyeVault: fee receiver is zero address"
         );
 
         config.feeHodler = feeHodler;
@@ -158,14 +170,13 @@ contract EyeVault is Ownable {
             tokenPairAddress,
             exchangeValue
         );
-        //SCX receiver is Scarcity vault here
+        // SCX receiver is a Scarcity vault here
         config.scxToken.transferFrom(msg.sender, config.feeHodler, feeValue);
 
         uint liquidityCreated = config.tokenPair.mint(address(this));
 
         lockedLP[beneficiary].push(
             LPbatch({
-                holder: beneficiary,
                 amount: liquidityCreated,
                 timestamp: block.timestamp,
                 claimed: false
@@ -209,26 +220,13 @@ contract EyeVault is Ownable {
             "EyeVault: donation transfer failed in LP claim."
         );
         require(
-            config.tokenPair.transfer(batch.holder, batch.amount - donation),
+            config.tokenPair.transfer(msg.sender, batch.amount - donation),
             "EyeVault: transfer failed in LP claim."
         );
     }
 
-    function lockedLPLength(address holder) public view returns (uint) {
-        return lockedLP[holder].length;
-    }
-
-    function getLockedLP(address holder, uint position)
-        public
-        view
-        returns (
-            address,
-            uint,
-            uint,
-            bool
-        )
-    {
-        LPbatch memory batch = lockedLP[holder][position];
-        return (batch.holder, batch.amount, batch.timestamp, batch.claimed);
+    // Could not be canceled if activated
+    function enableLPForceUnlock() public onlyOwner {
+        forceUnlock = true;
     }
 }

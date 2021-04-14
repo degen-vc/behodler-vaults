@@ -25,7 +25,6 @@ contract('Eye vault', function(accounts) {
   const donationShare = 10;
   const purchaseFee = 10;
 
-  let uniswapOracle;
   let uniswapPair;
   let uniswapFactory;
   let uniswapRouter;

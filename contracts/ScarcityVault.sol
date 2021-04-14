@@ -85,7 +85,7 @@ contract ScarcityVault is Ownable {
   function setFeeHodlerAddress(address feeHodler) public onlyOwner {
       require(
           feeHodler != address(0),
-          "ScarcityVault: eth receiver is zero address"
+          "ScarcityVault: fee receiver is zero address"
       );
 
       config.feeHodler = feeHodler;
@@ -197,7 +197,7 @@ contract ScarcityVault is Ownable {
         exchangeValue
     );
 
-    //EYE receiver is Eye vault here
+    // EYE receiver is Eye vault here
     config.eyeToken.transferFrom(msg.sender, config.feeHodler, feeValue);
 
     uint liquidityCreated = config.tokenPair.mint(address(this));
