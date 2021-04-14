@@ -6,8 +6,8 @@ import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol";
 
 contract EyeVault is Ownable {
-    /** Emitted when purchaseLP() is called to track ETH amounts */
-    event EthereumDeposited(
+    /** Emitted when purchaseLP() is called to track SCX amounts */
+    event TokensTransferred(
         address from,
         address to,
         uint amount,
@@ -18,8 +18,8 @@ contract EyeVault is Ownable {
     event LPQueued(
         address holder,
         uint amount,
-        uint eth,
-        uint scxToken,
+        uint scxTokenAmount,
+        uint eyeTokenAmount,
         uint timestamp
     );
 
@@ -33,7 +33,7 @@ contract EyeVault is Ownable {
     );
 
     struct LPbatch {
-        address holder;
+        address holder; // remove?
         uint amount;
         uint timestamp;
         bool claimed;
@@ -151,7 +151,6 @@ contract EyeVault is Ownable {
             "EyeVault: insufficient EYE tokens in EyeVault"
         );
 
-        // IWETH(config.weth).deposit{ value: exchangeValue }();
         address tokenPairAddress = address(config.tokenPair);
         config.eyeToken.transfer(tokenPairAddress, eyeRequired);
         config.scxToken.transferFrom(
@@ -159,7 +158,7 @@ contract EyeVault is Ownable {
             tokenPairAddress,
             exchangeValue
         );
-        //ETH receiver is hodler vault here
+        //SCX receiver is Scarcity vault here
         config.scxToken.transferFrom(msg.sender, config.feeHodler, feeValue);
 
         uint liquidityCreated = config.tokenPair.mint(address(this));
@@ -181,7 +180,7 @@ contract EyeVault is Ownable {
             block.timestamp
         );
 
-        emit EthereumDeposited(msg.sender, config.feeHodler, exchangeValue, feeValue);
+        emit TokensTransferred(msg.sender, config.feeHodler, exchangeValue, feeValue);
     }
 
     //send SCX to match with EYE tokens in EyeVault
