@@ -43,8 +43,8 @@ contract('Accelerator vault', function(accounts) {
     weth = contracts.weth;
 
     // deploy and setup main contracts
-    eyeToken = await MockToken.new("Behodler.io", "EYE", bn('10000000').mul(baseUnit));
-    scarcityToken = await MockToken.new("Scarcity", "SCX", bn('10000000').mul(baseUnit));
+    eyeToken = await MockToken.new('Behodler.io', 'EYE', bn('10000000').mul(baseUnit));
+    scarcityToken = await MockToken.new('Scarcity', 'SCX', bn('10000000').mul(baseUnit));
     acceleratorVault = await AcceleratorVault.new();
 
     await uniswapFactory.createPair(eyeToken.address, scarcityToken.address);

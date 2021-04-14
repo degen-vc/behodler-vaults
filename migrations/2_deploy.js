@@ -2,9 +2,9 @@ require('dotenv').config();
 
 const AcceleratorVault = artifacts.require('AcceleratorVault');
 const HodlerVault = artifacts.require('HodlerVault');
-const Eye = artifacts.require('Eye');
-const Scarcity = artifacts.require('Scarcity');
 const UniswapFactory = artifacts.require('UniswapFactory');
+const Eye = artifacts.require('ERC20Mock');
+const Scarcity = artifacts.require('ERC20Mock');
 
 const { 
   UNISWAP_FACTORY, 
@@ -17,6 +17,7 @@ module.exports = async (deployer, network, accounts) => {
   const stakeDuration = 4;
   const donationShare = 0;
   const purchaseFee = 10;
+  const totalSupply = '10000000000000000000000000';
 
   const placeholder = accounts[2];
 
@@ -32,25 +33,25 @@ module.exports = async (deployer, network, accounts) => {
   const hodlerVault = await HodlerVault.deployed();
   pausePromise('HodlerVault');
 
-  await deployer.deploy(Eye);
+  await deployer.deploy(Eye, 'Behodler.io', 'EYE', totalSupply);
   const eyeToken = await Eye.deployed();
   pausePromise('Eye');
 
-  await deployer.deploy(Scarcity);
-  const scarcityToken = await Scarcity.deployed();
+  await deployer.deploy(Scarcity, 'Scarcity', 'SCX', totalSupply);
+  const scxToken = await Scarcity.deployed();
   pausePromise('Scarcity');
 
   if (network === 'kovan') {
     const uniswapFactory = await UniswapFactory.at(UNISWAP_FACTORY);
-    await uniswapFactory.createPair(WETH_KOVAN, osmToken.address);
+    await uniswapFactory.createPair(eyeToken.address, scxToken.address);
     pausePromise('Create pair');
 
-    uniswapPair = await uniswapFactory.getPair.call(WETH_KOVAN, osmToken.address);
-    await deployer.deploy(PriceOracle, uniswapPair, osmToken.address, WETH_KOVAN);
+    uniswapPair = await uniswapFactory.getPair.call(eyeToken.address, scxToken.address);
     
     await acceleratorVault.seed(
       stakeDuration, 
-      placeholder, 
+      scxToken.address,
+      eyeToken.address, 
       uniswapPair, 
       UNISWAP_ROUTER, 
       hodlerVault.address,
@@ -60,7 +61,8 @@ module.exports = async (deployer, network, accounts) => {
 
     await hodlerVault.seed(
       stakeDuration,
-      placeholder,
+      scxToken.address,
+      eyeToken.address,
       uniswapPair,
       UNISWAP_ROUTER
     );
