@@ -1,6 +1,6 @@
 require('dotenv').config();
 
-const AcceleratorVault = artifacts.require('AcceleratorVault');
+const EyeVault = artifacts.require('EyeVault');
 const HodlerVault = artifacts.require('HodlerVault');
 const UniswapFactory = artifacts.require('UniswapFactory');
 const Eye = artifacts.require('ERC20Mock');
@@ -8,9 +8,7 @@ const Scarcity = artifacts.require('ERC20Mock');
 
 const { 
   UNISWAP_FACTORY, 
-  UNISWAP_ROUTER,
-  WETH_KOVAN,
-  UNISWAP_PAIR
+  UNISWAP_ROUTER
 } = process.env;
 
 module.exports = async (deployer, network, accounts) => {
@@ -19,15 +17,13 @@ module.exports = async (deployer, network, accounts) => {
   const purchaseFee = 10;
   const totalSupply = '10000000000000000000000000';
 
-  const placeholder = accounts[2];
-
   if (network === 'development') {
     return;
   }
 
-  await deployer.deploy(AcceleratorVault);
-  const acceleratorVault = await AcceleratorVault.deployed();
-  pausePromise('AcceleratorVault');
+  await deployer.deploy(EyeVault);
+  const eyeVault = await EyeVault.deployed();
+  pausePromise('EyeVault');
 
   await deployer.deploy(HodlerVault);
   const hodlerVault = await HodlerVault.deployed();
@@ -48,7 +44,7 @@ module.exports = async (deployer, network, accounts) => {
 
     uniswapPair = await uniswapFactory.getPair.call(eyeToken.address, scxToken.address);
     
-    await acceleratorVault.seed(
+    await eyeVault.seed(
       stakeDuration, 
       scxToken.address,
       eyeToken.address, 

@@ -5,7 +5,7 @@ import "./facades/IERC20.sol";
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol";
 
-contract AcceleratorVault is Ownable {
+contract EyeVault is Ownable {
     /** Emitted when purchaseLP() is called to track ETH amounts */
     event EthereumDeposited(
         address from,
@@ -39,7 +39,7 @@ contract AcceleratorVault is Ownable {
         bool claimed;
     }
 
-    struct AcceleratorVaultConfig {
+    struct EyeVaultConfig {
         IERC20 scxToken;
         IERC20 eyeToken;
         IUniswapV2Router02 uniswapRouter;
@@ -54,13 +54,13 @@ contract AcceleratorVault is Ownable {
     bool private locked;
 
     modifier lock {
-        require(!locked, "AcceleratorVault: reentrancy violation");
+        require(!locked, "EyeVault: reentrancy violation");
         locked = true;
         _;
         locked = false;
     }
 
-    AcceleratorVaultConfig public config;
+    EyeVaultConfig public config;
 
     mapping(address => LPbatch[]) public lockedLP;
     mapping(address => uint) public queueCounter;
@@ -95,7 +95,7 @@ contract AcceleratorVault is Ownable {
     function setFeeHodlerAddress(address feeHodler) public onlyOwner {
         require(
             feeHodler != address(0),
-            "AcceleratorVault: eth receiver is zero address"
+            "EyeVault: eth receiver is zero address"
         );
 
         config.feeHodler = feeHodler;
@@ -107,11 +107,11 @@ contract AcceleratorVault is Ownable {
     {
         require(
             donationShare <= 100,
-            "AcceleratorVault: donation share % between 0 and 100"
+            "EyeVault: donation share % between 0 and 100"
         );
         require(
             purchaseFee <= 100,
-            "AcceleratorVault: purchase fee share % between 0 and 100"
+            "EyeVault: purchase fee share % between 0 and 100"
         );
 
         config.stakeDuration = duration * 1 days;
@@ -120,9 +120,9 @@ contract AcceleratorVault is Ownable {
     }
 
     function purchaseLPFor(address beneficiary, uint amount) public lock {
-        require(amount > 0, "AcceleratorVault: SCX required to mint LP");
-        require(config.scxToken.balanceOf(msg.sender) >= amount, "AcceleratorVault: Not enough SCX tokens");
-        require(config.scxToken.allowance(msg.sender, address(this)) >= amount, "AcceleratorVault: Not enough SCX tokens allowance");
+        require(amount > 0, "EyeVault: SCX required to mint LP");
+        require(config.scxToken.balanceOf(msg.sender) >= amount, "EyeVault: Not enough SCX tokens");
+        require(config.scxToken.allowance(msg.sender, address(this)) >= amount, "EyeVault: Not enough SCX tokens allowance");
 
         uint feeValue = (config.purchaseFee * amount) / 100;
         uint exchangeValue = amount - feeValue;
@@ -148,7 +148,7 @@ contract AcceleratorVault is Ownable {
         uint balance = IERC20(config.eyeToken).balanceOf(address(this));
         require(
             balance >= eyeRequired,
-            "AcceleratorVault: insufficient EYE tokens in AcceleratorVault"
+            "EyeVault: insufficient EYE tokens in EyeVault"
         );
 
         // IWETH(config.weth).deposit{ value: exchangeValue }();
@@ -184,7 +184,7 @@ contract AcceleratorVault is Ownable {
         emit EthereumDeposited(msg.sender, config.feeHodler, exchangeValue, feeValue);
     }
 
-    //send SCX to match with EYE tokens in AcceleratorVault
+    //send SCX to match with EYE tokens in EyeVault
     function purchaseLP(uint amount) public {
         purchaseLPFor(msg.sender, amount);
     }
@@ -193,12 +193,12 @@ contract AcceleratorVault is Ownable {
         uint next = queueCounter[msg.sender];
         require(
             next < lockedLP[msg.sender].length,
-            "AcceleratorVault: nothing to claim."
+            "EyeVault: nothing to claim."
         );
         LPbatch storage batch = lockedLP[msg.sender][next];
         require(
             block.timestamp - batch.timestamp > getStakeDuration(),
-            "AcceleratorVault: LP still locked."
+            "EyeVault: LP still locked."
         );
         next++;
         queueCounter[msg.sender] = next;
@@ -207,11 +207,11 @@ contract AcceleratorVault is Ownable {
         emit LPClaimed(msg.sender, batch.amount, block.timestamp, donation, batch.claimed);
         require(
             config.tokenPair.transfer(address(0), donation),
-            "AcceleratorVault: donation transfer failed in LP claim."
+            "EyeVault: donation transfer failed in LP claim."
         );
         require(
             config.tokenPair.transfer(batch.holder, batch.amount - donation),
-            "AcceleratorVault: transfer failed in LP claim."
+            "EyeVault: transfer failed in LP claim."
         );
     }
 

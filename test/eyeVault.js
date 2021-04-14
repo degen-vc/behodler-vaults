@@ -5,13 +5,11 @@ const { expectEvent, expectRevert, constants } = require("@openzeppelin/test-hel
 const { web3 } = require('@openzeppelin/test-helpers/src/setup');
 
 const MockToken = artifacts.require('ERC20Mock');
-// const EyeToken = artifacts.require('Eye');
-// const ScarcityToken = artifacts.require('Scarcity.sol');
-const AcceleratorVault = artifacts.require('AcceleratorVault');
+const EyeVault = artifacts.require('EyeVault');
 const IUniswapV2Pair = artifacts.require('IUniswapV2Pair');
 
 
-contract('Accelerator vault', function(accounts) {
+contract('Eye vault', function(accounts) {
   const ganache = new Ganache(web3);
   afterEach('revert', ganache.revert);
 
@@ -34,7 +32,7 @@ contract('Accelerator vault', function(accounts) {
   let weth;
 
   let eyeToken, scarcityToken;
-  let acceleratorVault;
+  let eyeVault;
 
   before('setup others', async function() {
     const contracts = await deployUniswap(accounts);
@@ -45,12 +43,12 @@ contract('Accelerator vault', function(accounts) {
     // deploy and setup main contracts
     eyeToken = await MockToken.new('Behodler.io', 'EYE', bn('10000000').mul(baseUnit));
     scarcityToken = await MockToken.new('Scarcity', 'SCX', bn('10000000').mul(baseUnit));
-    acceleratorVault = await AcceleratorVault.new();
+    eyeVault = await EyeVault.new();
 
     await uniswapFactory.createPair(eyeToken.address, scarcityToken.address);
     uniswapPair = await uniswapFactory.getPair.call(eyeToken.address, scarcityToken.address);
 
-    await acceleratorVault.seed(
+    await eyeVault.seed(
       stakeDuration,
       scarcityToken.address,
       eyeToken.address,
@@ -66,7 +64,7 @@ contract('Accelerator vault', function(accounts) {
 
   describe('General tests', async () => {
     it('should set all values after AV setup', async () => {
-      const config = await acceleratorVault.config();
+      const config = await eyeVault.config();
       assert.equal(config.scxToken, scarcityToken.address);
       assert.equal(config.eyeToken, eyeToken.address);
       assert.equal(config.tokenPair, uniswapPair);
@@ -79,7 +77,7 @@ contract('Accelerator vault', function(accounts) {
 
     it('should not set parameters from non-owner', async () => {
       await expectRevert(
-        acceleratorVault.setParameters(stakeDuration, donationShare, purchaseFee, { from: NOT_OWNER }),
+        eyeVault.setParameters(stakeDuration, donationShare, purchaseFee, { from: NOT_OWNER }),
         'Ownable: caller is not the owner'
       );
     });
@@ -89,8 +87,8 @@ contract('Accelerator vault', function(accounts) {
       const newDonationShare = 20;
       const newPurchaseFee = 20;
       
-      await acceleratorVault.setParameters(newStakeDuration, newDonationShare, newPurchaseFee);
-      const { stakeDuration, donationShare, purchaseFee } = await acceleratorVault.config();
+      await eyeVault.setParameters(newStakeDuration, newDonationShare, newPurchaseFee);
+      const { stakeDuration, donationShare, purchaseFee } = await eyeVault.config();
 
       assertBNequal(stakeDuration, 691200);
       assertBNequal(donationShare, newDonationShare);
@@ -99,16 +97,16 @@ contract('Accelerator vault', function(accounts) {
 
     it('should not do a forced unlock from non-owner', async () => {
       await expectRevert(
-        acceleratorVault.enableLPForceUnlock({ from: NOT_OWNER }),
+        eyeVault.enableLPForceUnlock({ from: NOT_OWNER }),
         'Ownable: caller is not the owner'
       );
     });
 
     it('should do a forced unlock and set lock period to 0', async () => {
-      await acceleratorVault.enableLPForceUnlock();
-      const stakeDuration = await acceleratorVault.getStakeDuration();
+      await eyeVault.enableLPForceUnlock();
+      const stakeDuration = await eyeVault.getStakeDuration();
 
-      assert.isTrue(await acceleratorVault.forceUnlock());
+      assert.isTrue(await eyeVault.forceUnlock());
       assertBNequal(stakeDuration, 0);
     });
 
@@ -116,15 +114,15 @@ contract('Accelerator vault', function(accounts) {
       const NEW_HODLER = accounts[3];
 
       await expectRevert(
-        acceleratorVault.setFeeHodlerAddress(NEW_HODLER, { from: NOT_OWNER }),
+        eyeVault.setFeeHodlerAddress(NEW_HODLER, { from: NOT_OWNER }),
         'Ownable: caller is not the owner'
       );
     });
 
     it('should set hodler\'s address', async () => {
       const NEW_HODLER = accounts[3];
-      await acceleratorVault.setFeeHodlerAddress(NEW_HODLER);
-      const { feeHodler } = await acceleratorVault.config();
+      await eyeVault.setFeeHodlerAddress(NEW_HODLER);
+      const { feeHodler } = await eyeVault.config();
 
       assert.equal(feeHodler, NEW_HODLER);
     });
@@ -133,8 +131,8 @@ contract('Accelerator vault', function(accounts) {
   describe('PurchaseLP tests', async () => {
     it('should not purchase LP with 0 SCX', async () => {
       await expectRevert(
-        acceleratorVault.purchaseLP(0),
-        'AcceleratorVault: SCX required to mint LP'
+        eyeVault.purchaseLP(0),
+        'EyeVault: SCX required to mint LP'
       );
     });
 
@@ -156,17 +154,17 @@ contract('Accelerator vault', function(accounts) {
         new Date().getTime() + 3000
       );
 
-      await scarcityToken.approve(acceleratorVault.address, bn(-1));
+      await scarcityToken.approve(eyeVault.address, bn(-1));
       await expectRevert(
-        acceleratorVault.purchaseLP(purchaseValue),
-        'AcceleratorVault: insufficient EYE tokens in AcceleratorVault'
+        eyeVault.purchaseLP(purchaseValue),
+        'EyeVault: insufficient EYE tokens in EyeVault'
       );
     });
 
     it('should purchase LP for 1 ETH', async () => {
       const liquidityEyeAmount = bn('10000').mul(baseUnit); // 10.000 tokens
       const liquidityScxAmount = bn('500').mul(baseUnit); // 500 SCX
-      const transferToAccelerator = bn('20000').mul(baseUnit); // 20.000 tokens
+      const transferToEye = bn('20000').mul(baseUnit); // 20.000 tokens
       const purchaseValue = bn('10').mul(baseUnit); // 10 SCX
 
       await eyeToken.approve(uniswapRouter.address, liquidityEyeAmount);
@@ -182,23 +180,23 @@ contract('Accelerator vault', function(accounts) {
         new Date().getTime() + 3000
       );
 
-      await eyeToken.transfer(acceleratorVault.address, transferToAccelerator);
-      const vaultBalance = await eyeToken.balanceOf(acceleratorVault.address);
-      assertBNequal(vaultBalance, transferToAccelerator);
+      await eyeToken.transfer(eyeVault.address, transferToEye);
+      const vaultBalance = await eyeToken.balanceOf(eyeVault.address);
+      assertBNequal(vaultBalance, transferToEye);
       
       const hodlerBalanceBefore = bn(await scarcityToken.balanceOf(HODLER_VAULT_FAKE));
-      await scarcityToken.approve(acceleratorVault.address, bn(-1));
-      const purchaseLP = await acceleratorVault.purchaseLP(purchaseValue);
-      const lockedLpLength = await acceleratorVault.lockedLPLength(OWNER);
+      await scarcityToken.approve(eyeVault.address, bn(-1));
+      const purchaseLP = await eyeVault.purchaseLP(purchaseValue);
+      const lockedLpLength = await eyeVault.lockedLPLength(OWNER);
       assertBNequal(lockedLpLength, 1);
 
-      const lockedLP = await acceleratorVault.getLockedLP(OWNER, 0);
+      const lockedLP = await eyeVault.getLockedLP(OWNER, 0);
       const { amount, timestamp } = purchaseLP.logs[0].args;
       assert.equal(lockedLP[0], OWNER);
       assertBNequal(lockedLP[1], amount);
       assertBNequal(lockedLP[2], timestamp);
 
-      const { feeHodler } = await acceleratorVault.config();
+      const { feeHodler } = await eyeVault.config();
       const { to, percentageAmount } = purchaseLP.logs[1].args;
       const estimatedHodlerAmount = (purchaseValue * purchaseFee) / 100;
       const hodlerBalanceAfter = bn(await scarcityToken.balanceOf(HODLER_VAULT_FAKE));
@@ -213,7 +211,7 @@ contract('Accelerator vault', function(accounts) {
     it('should not purchase LP with too much SCX', async () => {
       const liquidityEyeAmount = bn('10000').mul(baseUnit); // 10.000 tokens
       const liquidityScxAmount = bn('500').mul(baseUnit); // 500 SCX
-      const transferToAccelerator = bn('20').mul(baseUnit); // 20 tokens
+      const transferToEye = bn('20').mul(baseUnit); // 20 tokens
       const purchaseValue = bn('1000').mul(baseUnit); // 1000 SCX
 
       await eyeToken.approve(uniswapRouter.address, liquidityEyeAmount);
@@ -229,14 +227,14 @@ contract('Accelerator vault', function(accounts) {
         new Date().getTime() + 3000
       );
 
-      await eyeToken.transfer(acceleratorVault.address, transferToAccelerator);
-      const vaultBalance = await eyeToken.balanceOf(acceleratorVault.address);
-      assertBNequal(vaultBalance, transferToAccelerator);
+      await eyeToken.transfer(eyeVault.address, transferToEye);
+      const vaultBalance = await eyeToken.balanceOf(eyeVault.address);
+      assertBNequal(vaultBalance, transferToEye);
 
-      await scarcityToken.approve(acceleratorVault.address, bn(-1));
+      await scarcityToken.approve(eyeVault.address, bn(-1));
       await expectRevert(
-        acceleratorVault.purchaseLP(purchaseValue),
-        'AcceleratorVault: insufficient EYE tokens in AcceleratorVault'
+        eyeVault.purchaseLP(purchaseValue),
+        'EyeVault: insufficient EYE tokens in EyeVault'
       );
     });
   });
@@ -244,15 +242,15 @@ contract('Accelerator vault', function(accounts) {
   describe('ClaimLP', async () => {
     it('should not be to claim if there is no locked LP', async () => {
       await expectRevert(
-        acceleratorVault.claimLP(),
-        'AcceleratorVault: nothing to claim.'
+        eyeVault.claimLP(),
+        'EyeVault: nothing to claim.'
       );
     });
 
     it('should not be able to claim if LP is still locked', async () => {
       const liquidityEyeAmount = bn('10000').mul(baseUnit); // 10.000 tokens
       const liquidityScxAmount = bn('500').mul(baseUnit); // 500 SCX
-      const transferToAccelerator = bn('20000').mul(baseUnit); // 20.000 tokens
+      const transferToEye = bn('20000').mul(baseUnit); // 20.000 tokens
       const purchaseValue = bn('10').mul(baseUnit); // 10 SCX
 
       await eyeToken.approve(uniswapRouter.address, liquidityEyeAmount);
@@ -268,20 +266,20 @@ contract('Accelerator vault', function(accounts) {
         new Date().getTime() + 3000
       );
 
-      await eyeToken.transfer(acceleratorVault.address, transferToAccelerator);
-      await scarcityToken.approve(acceleratorVault.address, bn(-1));
-      await acceleratorVault.purchaseLP(purchaseValue);
+      await eyeToken.transfer(eyeVault.address, transferToEye);
+      await scarcityToken.approve(eyeVault.address, bn(-1));
+      await eyeVault.purchaseLP(purchaseValue);
 
       await expectRevert(
-        acceleratorVault.claimLP(),
-        'AcceleratorVault: LP still locked.'
+        eyeVault.claimLP(),
+        'EyeVault: LP still locked.'
       );
     });
 
     it('should be able to claim 1 batch after 1 purchase', async () => {
       const liquidityEyeAmount = bn('10000').mul(baseUnit); // 10.000 tokens
       const liquidityScxAmount = bn('500').mul(baseUnit); // 500 SCX
-      const transferToAccelerator = bn('20000').mul(baseUnit); // 20.000 tokens
+      const transferToEye = bn('20000').mul(baseUnit); // 20.000 tokens
       const purchaseValue = bn('10').mul(baseUnit); // 10 SCX
       const pair = await IUniswapV2Pair.at(uniswapPair);
 
@@ -299,16 +297,16 @@ contract('Accelerator vault', function(accounts) {
       );
 
       ganache.setTime(startTime);
-      await eyeToken.transfer(acceleratorVault.address, transferToAccelerator);
-      await scarcityToken.approve(acceleratorVault.address, bn(-1));
-      await acceleratorVault.purchaseLP(purchaseValue);
-      const lockedLP = await acceleratorVault.getLockedLP(OWNER, 0);
-      const { donationShare } = await acceleratorVault.config();
-      const stakeDuration = await acceleratorVault.getStakeDuration();
+      await eyeToken.transfer(eyeVault.address, transferToEye);
+      await scarcityToken.approve(eyeVault.address, bn(-1));
+      await eyeVault.purchaseLP(purchaseValue);
+      const lockedLP = await eyeVault.getLockedLP(OWNER, 0);
+      const { donationShare } = await eyeVault.config();
+      const stakeDuration = await eyeVault.getStakeDuration();
       const lpBalanceBefore = await pair.balanceOf(OWNER);
 
       ganache.setTime(bn(startTime).add(stakeDuration));
-      const claimLP = await acceleratorVault.claimLP();
+      const claimLP = await eyeVault.claimLP();
       const { holder, amount, exitFee, claimed } = claimLP.logs[0].args;
       const estimatedFeeAmount = lockedLP[1].mul(donationShare).div(bn('100'));
       const lpBalanceAfter = await pair.balanceOf(OWNER);
@@ -323,7 +321,7 @@ contract('Accelerator vault', function(accounts) {
     it('should be able to claim 2 batches after 2 purchases and 1 3rd party purchase', async () => {
       const liquidityEyeAmount = bn('10000').mul(baseUnit); // 10.000 tokens
       const liquidityScxAmount = bn('500').mul(baseUnit); // 500 SCX
-      const transferToAccelerator = bn('20000').mul(baseUnit); // 20.000 tokens
+      const transferToEye = bn('20000').mul(baseUnit); // 20.000 tokens
       const purchaseValue = bn('10').mul(baseUnit); // 10 SCX
       const pair = await IUniswapV2Pair.at(uniswapPair);
 
@@ -341,29 +339,29 @@ contract('Accelerator vault', function(accounts) {
       );
 
       ganache.setTime(startTime);
-      await eyeToken.transfer(acceleratorVault.address, transferToAccelerator);
-      await scarcityToken.approve(acceleratorVault.address, bn(-1));
-      await acceleratorVault.purchaseLP(purchaseValue);
-      await acceleratorVault.purchaseLP(purchaseValue);
+      await eyeToken.transfer(eyeVault.address, transferToEye);
+      await scarcityToken.approve(eyeVault.address, bn(-1));
+      await eyeVault.purchaseLP(purchaseValue);
+      await eyeVault.purchaseLP(purchaseValue);
 
       await scarcityToken.transfer(NOT_OWNER, purchaseValue);
-      await scarcityToken.approve(acceleratorVault.address, bn(-1), { from: NOT_OWNER });
-      await acceleratorVault.purchaseLP(purchaseValue, { from: NOT_OWNER });
+      await scarcityToken.approve(eyeVault.address, bn(-1), { from: NOT_OWNER });
+      await eyeVault.purchaseLP(purchaseValue, { from: NOT_OWNER });
 
-      assertBNequal(await acceleratorVault.lockedLPLength(OWNER), 2);
-      assertBNequal(await acceleratorVault.lockedLPLength(NOT_OWNER), 1);
+      assertBNequal(await eyeVault.lockedLPLength(OWNER), 2);
+      assertBNequal(await eyeVault.lockedLPLength(NOT_OWNER), 1);
 
-      const lockedLP1 = await acceleratorVault.getLockedLP(OWNER, 0);
-      const lockedLP2 = await acceleratorVault.getLockedLP(OWNER, 1);
-      const lockedLP3 = await acceleratorVault.getLockedLP(NOT_OWNER, 0);
-      const stakeDuration = await acceleratorVault.getStakeDuration();
+      const lockedLP1 = await eyeVault.getLockedLP(OWNER, 0);
+      const lockedLP2 = await eyeVault.getLockedLP(OWNER, 1);
+      const lockedLP3 = await eyeVault.getLockedLP(NOT_OWNER, 0);
+      const stakeDuration = await eyeVault.getStakeDuration();
       const lpBalanceBefore = await pair.balanceOf(OWNER);
 
       ganache.setTime(bn(startTime).add(stakeDuration));
-      const claimLP1 = await acceleratorVault.claimLP();
+      const claimLP1 = await eyeVault.claimLP();
       const { amount: amount1, exitFee: exitFee1 } = claimLP1.logs[0].args;
       
-      const claimLP2 = await acceleratorVault.claimLP();
+      const claimLP2 = await eyeVault.claimLP();
       const { amount: amount2, exitFee: exitFee2 } = claimLP2.logs[0].args;
       
       const expectedLpAmount = amount1.sub(exitFee1).add(amount2.sub(exitFee2));
@@ -375,12 +373,12 @@ contract('Accelerator vault', function(accounts) {
 
       // an attempt to claim nonexistent batch
       await expectRevert(
-        acceleratorVault.claimLP(),
-        'AcceleratorVault: nothing to claim.'
+        eyeVault.claimLP(),
+        'EyeVault: nothing to claim.'
       );
 
       const lpBalanceBefore3 = await pair.balanceOf(NOT_OWNER);
-      const claimLP3 = await acceleratorVault.claimLP({ from: NOT_OWNER });
+      const claimLP3 = await eyeVault.claimLP({ from: NOT_OWNER });
       const { holder: holder3, amount: amount3, exitFee: exitFee3 } = claimLP3.logs[0].args;
 
       const expectedLpAmount3 = amount3.sub(exitFee3);
@@ -394,7 +392,7 @@ contract('Accelerator vault', function(accounts) {
     it('should be able to claim LP after force unlock', async () => {
       const liquidityEyeAmount = bn('10000').mul(baseUnit); // 10.000 tokens
       const liquidityScxAmount = bn('500').mul(baseUnit); // 500 SCX
-      const transferToAccelerator = bn('20000').mul(baseUnit); // 20.000 tokens
+      const transferToEye = bn('20000').mul(baseUnit); // 20.000 tokens
       const purchaseValue = bn('10').mul(baseUnit); // 10 SCX
       const pair = await IUniswapV2Pair.at(uniswapPair);
 
@@ -412,29 +410,29 @@ contract('Accelerator vault', function(accounts) {
       );
 
       ganache.setTime(startTime);
-      await eyeToken.transfer(acceleratorVault.address, transferToAccelerator);
-      await scarcityToken.approve(acceleratorVault.address, bn(-1));
+      await eyeToken.transfer(eyeVault.address, transferToEye);
+      await scarcityToken.approve(eyeVault.address, bn(-1));
       
-      await acceleratorVault.purchaseLP(purchaseValue);
-      await acceleratorVault.purchaseLP(purchaseValue);
+      await eyeVault.purchaseLP(purchaseValue);
+      await eyeVault.purchaseLP(purchaseValue);
 
-      const lockedLP1 = await acceleratorVault.getLockedLP(OWNER, 0);
-      const lockedLP2 = await acceleratorVault.getLockedLP(OWNER, 1);
+      const lockedLP1 = await eyeVault.getLockedLP(OWNER, 0);
+      const lockedLP2 = await eyeVault.getLockedLP(OWNER, 1);
       
-      await acceleratorVault.enableLPForceUnlock();
-      const stakeDuration = await acceleratorVault.getStakeDuration();
+      await eyeVault.enableLPForceUnlock();
+      const stakeDuration = await eyeVault.getStakeDuration();
       const lpBalanceBefore = await pair.balanceOf(OWNER);
 
-      assert.isTrue(await acceleratorVault.forceUnlock());
+      assert.isTrue(await eyeVault.forceUnlock());
       assertBNequal(stakeDuration, 0);
 
       ganache.setTime(bn(startTime).add(bn(5)));
 
-      const claimLP1 = await acceleratorVault.claimLP();
+      const claimLP1 = await eyeVault.claimLP();
       const { amount: amount1, exitFee: exitFee1 } = claimLP1.logs[0].args;
       assertBNequal(amount1, lockedLP1[1]);
 
-      const claimLP2 = await acceleratorVault.claimLP();
+      const claimLP2 = await eyeVault.claimLP();
       const { amount: amount2, exitFee: exitFee2 } = claimLP2.logs[0].args;
       assertBNequal(amount2, lockedLP2[1]);
 
