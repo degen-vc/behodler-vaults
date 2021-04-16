@@ -49,6 +49,8 @@ contract ScarcityVault is Ownable {
       uint8 purchaseFee; //0-100
   }
 
+  address public treasury;
+
   bool public forceUnlock;
   bool private locked;
 
@@ -81,6 +83,15 @@ contract ScarcityVault is Ownable {
       setFeeHodlerAddress(feeHodler);
       setParameters(duration, donationShare, purchaseFee);
   }
+
+  function setTreasury(address _treasury) public onlyOwner {
+        require(
+            _treasury != address(0),
+            "ScarcityVault: treasury is zero address"
+        );
+
+        treasury = _treasury;
+    }
 
   function setFeeHodlerAddress(address feeHodler) public onlyOwner {
       require(
@@ -256,4 +267,14 @@ contract ScarcityVault is Ownable {
   function enableLPForceUnlock() public onlyOwner {
       forceUnlock = true;
   }
+
+  function moveToTreasury(uint amount) public onlyOwner {
+        require(treasury != address(0),'ScarcityVault: treasury must be set');
+        require(
+            amount <= config.scxToken.balanceOf(address(this)),
+            "ScarcityVault: SCX amount exceeds balance"
+        );
+        
+        config.scxToken.transfer(treasury, amount);
+    }
 }
