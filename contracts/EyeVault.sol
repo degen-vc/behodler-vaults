@@ -78,7 +78,7 @@ contract EyeVault is Ownable {
         address feeHodler,
         uint8 donationShare, // LP Token
         uint8 purchaseFee // ETH
-    ) public onlyOwner {
+    ) external onlyOwner {
         config.scxToken = scxToken;
         config.eyeToken = eyeToken;
         config.uniswapRouter = IUniswapV2Router02(uniswapRouter);
@@ -88,7 +88,7 @@ contract EyeVault is Ownable {
     }
 
     function getLockedLP(address holder, uint position)
-        public
+        external
         view
         returns (
             address,
@@ -101,7 +101,7 @@ contract EyeVault is Ownable {
         return (holder, batch.amount, batch.timestamp, batch.claimed);
     }
 
-    function lockedLPLength(address holder) public view returns (uint) {
+    function lockedLPLength(address holder) external view returns (uint) {
         return lockedLP[holder].length;
     }
 
@@ -109,7 +109,7 @@ contract EyeVault is Ownable {
         return forceUnlock ? 0 : config.stakeDuration;
     }
 
-    function setTreasury(address _treasury) public onlyOwner {
+    function setTreasury(address _treasury) external onlyOwner {
         require(
             _treasury != address(0),
             "EyeVault: treasury is zero address"
@@ -209,11 +209,11 @@ contract EyeVault is Ownable {
     }
 
     //send SCX to match with EYE tokens in EyeVault
-    function purchaseLP(uint amount) public {
+    function purchaseLP(uint amount) external {
         purchaseLPFor(msg.sender, amount);
     }
 
-    function claimLP() public {
+    function claimLP() external {
         uint next = queueCounter[msg.sender];
         require(
             next < lockedLP[msg.sender].length,
@@ -240,11 +240,11 @@ contract EyeVault is Ownable {
     }
 
     // Could not be canceled if activated
-    function enableLPForceUnlock() public onlyOwner {
+    function enableLPForceUnlock() external onlyOwner {
         forceUnlock = true;
     }
 
-    function moveToTreasury(uint amount) public onlyOwner {
+    function moveToTreasury(uint amount) external onlyOwner {
         require(treasury != address(0),'EyeVault: treasury must be set');
         require(
             amount <= config.eyeToken.balanceOf(address(this)),

@@ -78,7 +78,7 @@ contract ScarcityVault is Ownable {
       address feeHodler,
       uint8 donationShare, // LP Token
       uint8 purchaseFee // ETH
-  ) public onlyOwner {
+  ) external onlyOwner {
       config.scxToken = scxToken;
       config.eyeToken = eyeToken;
       config.uniswapRouter = IUniswapV2Router02(uniswapRouter);
@@ -87,7 +87,7 @@ contract ScarcityVault is Ownable {
       setParameters(duration, donationShare, purchaseFee);
   }
 
-  function setTreasury(address _treasury) public onlyOwner {
+  function setTreasury(address _treasury) external onlyOwner {
         require(
             _treasury != address(0),
             "ScarcityVault: treasury is zero address"
@@ -123,7 +123,7 @@ contract ScarcityVault is Ownable {
       config.purchaseFee = purchaseFee;
   }
 
-  function maxTokensToInvest() public view returns (uint) {
+  function maxTokensToInvest() external view returns (uint) {
     uint totalSCX = config.scxToken.balanceOf(address(this));
     if (totalSCX == 0) {
         return 0;
@@ -150,7 +150,7 @@ contract ScarcityVault is Ownable {
   }
 
   function getLockedLP(address hodler, uint position)
-      public
+      external
       view
       returns (
           address,
@@ -163,7 +163,7 @@ contract ScarcityVault is Ownable {
       return (hodler, batch.amount, batch.timestamp, batch.claimed);
   }
 
-  function lockedLPLength(address hodler) public view returns (uint) {
+  function lockedLPLength(address hodler) external view returns (uint) {
       return lockedLP[hodler].length;
   }
 
@@ -236,11 +236,11 @@ contract ScarcityVault is Ownable {
   }
 
   //send EYE to match with SCX tokens in ScarcityVault
-  function purchaseLP(uint amount) public {
+  function purchaseLP(uint amount) external {
       purchaseLPFor(msg.sender, amount);
   }
 
-  function claimLP() public {
+  function claimLP() external {
       uint next = queueCounter[msg.sender];
       require(
           next < lockedLP[msg.sender].length,
@@ -267,11 +267,11 @@ contract ScarcityVault is Ownable {
   }
 
   // Could not be canceled if activated
-  function enableLPForceUnlock() public onlyOwner {
+  function enableLPForceUnlock() external onlyOwner {
       forceUnlock = true;
   }
 
-  function moveToTreasury(uint amount) public onlyOwner {
+  function moveToTreasury(uint amount) external onlyOwner {
         require(treasury != address(0),'ScarcityVault: treasury must be set');
         require(
             amount <= config.scxToken.balanceOf(address(this)),
