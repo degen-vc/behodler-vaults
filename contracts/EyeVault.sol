@@ -87,6 +87,32 @@ contract EyeVault is Ownable {
         setParameters(duration, donationShare, purchaseFee);
     }
 
+    function maxTokensToInvest() external view returns (uint) {
+    uint totalEYE = config.eyeToken.balanceOf(address(this));
+    if (totalEYE == 0) {
+        return 0;
+    }
+
+    uint scxMaxAllowed;
+    (uint reserve1, uint reserve2,) = config.tokenPair.getReserves();
+
+    if (address(config.scxToken) < address(config.eyeToken)) {
+        scxMaxAllowed = config.uniswapRouter.quote(
+            totalEYE,
+            reserve2,
+            reserve1
+        );
+    } else {
+        scxMaxAllowed = config.uniswapRouter.quote(
+            totalEYE,
+            reserve1,
+            reserve2
+        );
+    }
+
+    return scxMaxAllowed;
+  }
+
     function getLockedLP(address holder, uint position)
         external
         view
