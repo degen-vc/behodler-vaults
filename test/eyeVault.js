@@ -19,6 +19,7 @@ contract('Eye vault', function(accounts) {
   const OWNER = accounts[0];
   const NOT_OWNER = accounts[1];
   const SCX_VAULT_FAKE = accounts[2];
+  const TREASURY = accounts[3];
   const baseUnit = bn('1000000000000000000');
   const startTime = Math.floor(Date.now() / 1000);
   const stakeDuration = 1;
@@ -124,6 +125,58 @@ contract('Eye vault', function(accounts) {
       const { feeHodler } = await eyeVault.config();
 
       assert.equal(feeHodler, NEW_HODLER);
+    });
+  });
+
+  describe('Treasury tests', async () => {
+    it('should not set treasury from non-owner', async () => {
+      assertBNequal(await eyeVault.treasury(), constants.ZERO_ADDRESS);
+
+      await expectRevert(
+        eyeVault.setTreasury(TREASURY, { from: NOT_OWNER }),
+        'Ownable: caller is not the owner'
+      );
+    });
+
+    it('should set treasury\'s address', async () => {
+      assertBNequal(await eyeVault.treasury(), constants.ZERO_ADDRESS);
+      await eyeVault.setTreasury(TREASURY);
+      assertBNequal(await eyeVault.treasury(), TREASURY);
+    });
+
+    it('should revert with zero EYE balance', async () => {
+      const eyeAmount = bn('10000').mul(baseUnit);
+
+      await eyeVault.setTreasury(TREASURY);
+      assertBNequal(await eyeVault.treasury(), TREASURY);
+
+      await expectRevert(
+        eyeVault.moveToTreasury(eyeAmount),
+        'EyeVault: EYE amount exceeds balance'
+      );
+    });
+
+    it('should not move funds to a zero treasury address', async () => {
+      const eyeAmount = bn('10000').mul(baseUnit);
+
+      await eyeToken.transfer(eyeVault.address, eyeAmount);
+      assertBNequal(await eyeVault.treasury(), constants.ZERO_ADDRESS);
+
+      await expectRevert(
+        eyeVault.moveToTreasury(eyeAmount),
+        'EyeVault: treasury must be set'
+      );
+    });
+
+    it('should send a certain amount of EYE to a treasury address', async () => {
+      const eyeAmount = bn('10000').mul(baseUnit);
+
+      await eyeToken.transfer(eyeVault.address, eyeAmount);
+      await eyeVault.setTreasury(TREASURY);
+      await eyeVault.moveToTreasury(eyeAmount);
+
+      assertBNequal(await eyeVault.treasury(), TREASURY);
+      assertBNequal(await eyeToken.balanceOf(TREASURY), eyeAmount);
     });
   });
 

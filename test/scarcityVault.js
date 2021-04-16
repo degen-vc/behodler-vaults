@@ -8,7 +8,7 @@ const ScarcityVault = artifacts.require('ScarcityVault');
 const IUniswapV2Pair = artifacts.require('IUniswapV2Pair');
 
 
-contract('Eye vault', function(accounts) {
+contract('Scarcity vault', function(accounts) {
   const ganache = new Ganache(web3);
   afterEach('revert', ganache.revert);
 
@@ -18,6 +18,7 @@ contract('Eye vault', function(accounts) {
   const OWNER = accounts[0];
   const NOT_OWNER = accounts[1];
   const EYE_VAULT_FAKE = accounts[2];
+  const TREASURY = accounts[3];
   const baseUnit = bn('1000000000000000000');
   const startTime = Math.floor(Date.now() / 1000);
   const stakeDuration = 1;
@@ -123,6 +124,58 @@ contract('Eye vault', function(accounts) {
       const { feeHodler } = await scarcityVault.config();
 
       assert.equal(feeHodler, NEW_HODLER);
+    });
+  });
+
+  describe('Treasury tests', async () => {
+    it('should not set treasury from non-owner', async () => {
+      assertBNequal(await scarcityVault.treasury(), constants.ZERO_ADDRESS);
+
+      await expectRevert(
+        scarcityVault.setTreasury(TREASURY, { from: NOT_OWNER }),
+        'Ownable: caller is not the owner'
+      );
+    });
+
+    it('should set treasury\'s address', async () => {
+      assertBNequal(await scarcityVault.treasury(), constants.ZERO_ADDRESS);
+      await scarcityVault.setTreasury(TREASURY);
+      assertBNequal(await scarcityVault.treasury(), TREASURY);
+    });
+
+    it('should revert with zero SCX balance', async () => {
+      const scxAmount = bn('10000').mul(baseUnit);
+
+      await scarcityVault.setTreasury(TREASURY);
+      assertBNequal(await scarcityVault.treasury(), TREASURY);
+
+      await expectRevert(
+        scarcityVault.moveToTreasury(scxAmount),
+        'ScarcityVault: SCX amount exceeds balance'
+      );
+    });
+
+    it('should not move funds to a zero treasury address', async () => {
+      const scxAmount = bn('10000').mul(baseUnit);
+
+      await eyeToken.transfer(scarcityVault.address, scxAmount);
+      assertBNequal(await scarcityVault.treasury(), constants.ZERO_ADDRESS);
+
+      await expectRevert(
+        scarcityVault.moveToTreasury(scxAmount),
+        'ScarcityVault: treasury must be set'
+      );
+    });
+
+    it('should send a certain amount of SCX to a treasury address', async () => {
+      const scxAmount = bn('10000').mul(baseUnit);
+
+      await scarcityToken.transfer(scarcityVault.address, scxAmount);
+      await scarcityVault.setTreasury(TREASURY);
+      await scarcityVault.moveToTreasury(scxAmount);
+
+      assertBNequal(await scarcityVault.treasury(), TREASURY);
+      assertBNequal(await scarcityToken.balanceOf(TREASURY), scxAmount);
     });
   });
 
