@@ -49,6 +49,8 @@ contract EyeVault is Ownable {
         uint8 purchaseFee; //0-100
     }
 
+    address public treasury;
+
     bool public forceUnlock;
     bool private locked;
 
@@ -102,6 +104,15 @@ contract EyeVault is Ownable {
 
     function getStakeDuration() public view returns (uint) {
         return forceUnlock ? 0 : config.stakeDuration;
+    }
+
+    function setTreasury(address _treasury) public onlyOwner {
+        require(
+            _treasury != address(0),
+            "EyeVault: treasury is zero address"
+        );
+
+        treasury = _treasury;
     }
 
     function setFeeHodlerAddress(address feeHodler) public onlyOwner {
@@ -228,5 +239,15 @@ contract EyeVault is Ownable {
     // Could not be canceled if activated
     function enableLPForceUnlock() public onlyOwner {
         forceUnlock = true;
+    }
+
+    function moveToTreasury(uint amount) public onlyOwner {
+        require(treasury != address(0),'EyeVault: treasury must be set');
+        require(
+            amount <= config.eyeToken.balanceOf(address(this)),
+            "EyeVault: EYE amount exceeds balance"
+        );
+        
+        config.eyeToken.transfer(treasury, amount);
     }
 }
