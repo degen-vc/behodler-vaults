@@ -4,8 +4,11 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "./facades/IERC20.sol";
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol";
+import '@openzeppelin/contracts/math/SafeMath.sol';
 
 contract ScarcityVault is Ownable {
+  using SafeMath for uint;
+
   /** Emitted when purchaseLP() is called to track EYE amounts */
   event TokensTransferred(
       address from,
@@ -173,8 +176,8 @@ contract ScarcityVault is Ownable {
     require(config.eyeToken.balanceOf(msg.sender) >= amount, "ScarcityVault: Not enough EYE tokens");
     require(config.eyeToken.allowance(msg.sender, address(this)) >= amount, "ScarcityVault: Not enough EYE tokens allowance");
 
-    uint feeValue = (config.purchaseFee * amount) / 100;
-    uint exchangeValue = amount - feeValue;
+    uint feeValue = amount.mul(config.purchaseFee).div(100);
+    uint exchangeValue = amount.sub(feeValue);
 
     (uint reserve1, uint reserve2, ) = config.tokenPair.getReserves();
 
@@ -250,7 +253,7 @@ contract ScarcityVault is Ownable {
       );
       next++;
       queueCounter[msg.sender] = next;
-      uint donation = (config.donationShare * batch.amount) / 100;
+      uint donation = batch.amount.mul(config.donationShare).div(100);
       batch.claimed = true;
       emit LPClaimed(msg.sender, batch.amount, block.timestamp, donation, batch.claimed);
       require(
@@ -258,7 +261,7 @@ contract ScarcityVault is Ownable {
           "ScarcityVault: donation transfer failed in LP claim."
       );
       require(
-          config.tokenPair.transfer(msg.sender, batch.amount - donation),
+          config.tokenPair.transfer(msg.sender, batch.amount.sub(donation)),
           "ScarcityVault: transfer failed in LP claim."
       );
   }
