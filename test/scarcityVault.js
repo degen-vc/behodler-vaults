@@ -151,7 +151,7 @@ contract('Scarcity vault', function(accounts) {
 
       await expectRevert(
         scarcityVault.moveToTreasury(scxAmount),
-        'ScarcityVault: SCX amount exceeds balance'
+        'ERC20: transfer amount exceeds balance -- Reason given: ERC20: transfer amount exceeds balance.'
       );
     });
 
