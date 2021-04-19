@@ -206,7 +206,7 @@ contract('Eye vault', function(accounts) {
         new Date().getTime() + 3000
       );
 
-      await scarcityToken.approve(eyeVault.address, bn(-1));
+      await scarcityToken.approve(eyeVault.address, constants.MAX_UINT256);
       await expectRevert(
         eyeVault.purchaseLP(purchaseValue),
         'EyeVault: insufficient EYE tokens in EyeVault'
@@ -237,7 +237,7 @@ contract('Eye vault', function(accounts) {
       assertBNequal(vaultBalance, transferToEye);
       
       const hodlerBalanceBefore = bn(await scarcityToken.balanceOf(SCX_VAULT_FAKE));
-      await scarcityToken.approve(eyeVault.address, bn(-1));
+      await scarcityToken.approve(eyeVault.address, constants.MAX_UINT256);
       const purchaseLP = await eyeVault.purchaseLP(purchaseValue);
       const lockedLpLength = await eyeVault.lockedLPLength(OWNER);
       assertBNequal(lockedLpLength, 1);
@@ -283,7 +283,7 @@ contract('Eye vault', function(accounts) {
       const vaultBalance = await eyeToken.balanceOf(eyeVault.address);
       assertBNequal(vaultBalance, transferToEye);
 
-      await scarcityToken.approve(eyeVault.address, bn(-1));
+      await scarcityToken.approve(eyeVault.address, constants.MAX_UINT256);
       await expectRevert(
         eyeVault.purchaseLP(purchaseValue),
         'EyeVault: insufficient EYE tokens in EyeVault'
@@ -319,7 +319,7 @@ contract('Eye vault', function(accounts) {
       );
 
       await eyeToken.transfer(eyeVault.address, transferToEye);
-      await scarcityToken.approve(eyeVault.address, bn(-1));
+      await scarcityToken.approve(eyeVault.address, constants.MAX_UINT256);
       await eyeVault.purchaseLP(purchaseValue);
 
       await expectRevert(
@@ -350,7 +350,7 @@ contract('Eye vault', function(accounts) {
 
       ganache.setTime(startTime);
       await eyeToken.transfer(eyeVault.address, transferToEye);
-      await scarcityToken.approve(eyeVault.address, bn(-1));
+      await scarcityToken.approve(eyeVault.address, constants.MAX_UINT256);
       await eyeVault.purchaseLP(purchaseValue);
       const lockedLP = await eyeVault.getLockedLP(OWNER, 0);
       const { donationShare } = await eyeVault.config();
@@ -392,12 +392,12 @@ contract('Eye vault', function(accounts) {
 
       ganache.setTime(startTime);
       await eyeToken.transfer(eyeVault.address, transferToEye);
-      await scarcityToken.approve(eyeVault.address, bn(-1));
+      await scarcityToken.approve(eyeVault.address, constants.MAX_UINT256);
       await eyeVault.purchaseLP(purchaseValue);
       await eyeVault.purchaseLP(purchaseValue);
 
       await scarcityToken.transfer(NOT_OWNER, purchaseValue);
-      await scarcityToken.approve(eyeVault.address, bn(-1), { from: NOT_OWNER });
+      await scarcityToken.approve(eyeVault.address, constants.MAX_UINT256, { from: NOT_OWNER });
       await eyeVault.purchaseLP(purchaseValue, { from: NOT_OWNER });
 
       assertBNequal(await eyeVault.lockedLPLength(OWNER), 2);
@@ -463,7 +463,7 @@ contract('Eye vault', function(accounts) {
 
       ganache.setTime(startTime);
       await eyeToken.transfer(eyeVault.address, transferToEye);
-      await scarcityToken.approve(eyeVault.address, bn(-1));
+      await scarcityToken.approve(eyeVault.address, constants.MAX_UINT256);
       
       await eyeVault.purchaseLP(purchaseValue);
       await eyeVault.purchaseLP(purchaseValue);
