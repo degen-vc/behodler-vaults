@@ -152,7 +152,7 @@ contract('Eye vault', function(accounts) {
 
       await expectRevert(
         eyeVault.moveToTreasury(eyeAmount),
-        'EyeVault: EYE amount exceeds balance'
+        'ERC20: transfer amount exceeds balance -- Reason given: ERC20: transfer amount exceeds balance.'
       );
     });
 

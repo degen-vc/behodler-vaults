@@ -4,40 +4,40 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "./facades/IERC20.sol";
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol";
-import '@openzeppelin/contracts/math/SafeMath.sol';
+import "@openzeppelin/contracts/math/SafeMath.sol";
 
 contract EyeVault is Ownable {
-    using SafeMath for uint;
+    using SafeMath for uint256;
 
     /** Emitted when purchaseLP() is called to track SCX amounts */
     event TokensTransferred(
         address from,
         address to,
-        uint amount,
-        uint percentageAmount
+        uint256 amount,
+        uint256 percentageAmount
     );
 
     /** Emitted when purchaseLP() is called and LP tokens minted */
     event LPQueued(
         address holder,
-        uint amount,
-        uint scxTokenAmount,
-        uint eyeTokenAmount,
-        uint timestamp
+        uint256 amount,
+        uint256 scxTokenAmount,
+        uint256 eyeTokenAmount,
+        uint256 timestamp
     );
 
     /** Emitted when claimLP() is called */
     event LPClaimed(
         address holder,
-        uint amount,
-        uint timestamp,
-        uint exitFee,
+        uint256 amount,
+        uint256 timestamp,
+        uint256 exitFee,
         bool claimed
     );
 
     struct LPbatch {
-        uint amount;
-        uint timestamp;
+        uint256 amount;
+        uint256 timestamp;
         bool claimed;
     }
 
@@ -67,7 +67,7 @@ contract EyeVault is Ownable {
     EyeVaultConfig public config;
 
     mapping(address => LPbatch[]) public lockedLP;
-    mapping(address => uint) public queueCounter;
+    mapping(address => uint256) public queueCounter;
 
     function seed(
         uint32 duration,
@@ -87,39 +87,31 @@ contract EyeVault is Ownable {
         setParameters(duration, donationShare, purchaseFee);
     }
 
-    function maxTokensToInvest() external view returns (uint) {
-    uint totalEYE = config.eyeToken.balanceOf(address(this));
-    if (totalEYE == 0) {
-        return 0;
-    }
+    function maxTokensToInvest() external view returns (uint256) {
+        uint256 totalEYE = config.eyeToken.balanceOf(address(this));
+        if (totalEYE == 0) {
+            return 0;
+        }
 
-    uint scxMaxAllowed;
-    (uint reserve1, uint reserve2,) = config.tokenPair.getReserves();
-
-    if (address(config.scxToken) < address(config.eyeToken)) {
-        scxMaxAllowed = config.uniswapRouter.quote(
-            totalEYE,
-            reserve2,
-            reserve1
-        );
-    } else {
+        uint256 scxMaxAllowed;
+        //EYE < SCX
+        (uint256 reserve1, uint256 reserve2, ) = config.tokenPair.getReserves();
         scxMaxAllowed = config.uniswapRouter.quote(
             totalEYE,
             reserve1,
             reserve2
         );
+
+        return scxMaxAllowed;
     }
 
-    return scxMaxAllowed;
-  }
-
-    function getLockedLP(address holder, uint position)
+    function getLockedLP(address holder, uint256 position)
         external
         view
         returns (
             address,
-            uint,
-            uint,
+            uint256,
+            uint256,
             bool
         )
     {
@@ -127,19 +119,16 @@ contract EyeVault is Ownable {
         return (holder, batch.amount, batch.timestamp, batch.claimed);
     }
 
-    function lockedLPLength(address holder) external view returns (uint) {
+    function lockedLPLength(address holder) external view returns (uint256) {
         return lockedLP[holder].length;
     }
 
-    function getStakeDuration() public view returns (uint) {
+    function getStakeDuration() public view returns (uint256) {
         return forceUnlock ? 0 : config.stakeDuration;
     }
 
     function setTreasury(address _treasury) external onlyOwner {
-        require(
-            _treasury != address(0),
-            "EyeVault: treasury is zero address"
-        );
+        require(_treasury != address(0), "EyeVault: treasury is zero address");
 
         treasury = _treasury;
     }
@@ -153,10 +142,11 @@ contract EyeVault is Ownable {
         config.feeHodler = feeHodler;
     }
 
-    function setParameters(uint32 duration, uint8 donationShare, uint8 purchaseFee)
-        public
-        onlyOwner
-    {
+    function setParameters(
+        uint32 duration,
+        uint8 donationShare,
+        uint8 purchaseFee
+    ) public onlyOwner {
         require(
             donationShare <= 100,
             "EyeVault: donation share % between 0 and 100"
@@ -171,33 +161,23 @@ contract EyeVault is Ownable {
         config.purchaseFee = purchaseFee;
     }
 
-    function purchaseLPFor(address beneficiary, uint amount) public lock {
+    function purchaseLPFor(address beneficiary, uint256 amount) public lock {
         require(amount > 0, "EyeVault: SCX required to mint LP");
-        require(config.scxToken.balanceOf(msg.sender) >= amount, "EyeVault: Not enough SCX tokens");
-        require(config.scxToken.allowance(msg.sender, address(this)) >= amount, "EyeVault: Not enough SCX tokens allowance");
 
-        uint feeValue = amount.mul(config.purchaseFee).div(100);
-        uint exchangeValue = amount.sub(feeValue);
+        uint256 feeValue = amount.mul(config.purchaseFee).div(100);
+        uint256 exchangeValue = amount.sub(feeValue);
 
-        (uint reserve1, uint reserve2, ) = config.tokenPair.getReserves();
+        (uint256 reserve1, uint256 reserve2, ) = config.tokenPair.getReserves();
 
-        uint eyeRequired;
+        uint256 eyeRequired;
+        //eye<scx
+        eyeRequired = config.uniswapRouter.quote(
+            exchangeValue,
+            reserve1,
+            reserve2
+        );
 
-        if (address(config.scxToken) < address(config.eyeToken)) {
-            eyeRequired = config.uniswapRouter.quote(
-                exchangeValue,
-                reserve2,
-                reserve1
-            );
-        } else {
-            eyeRequired = config.uniswapRouter.quote(
-                exchangeValue,
-                reserve1,
-                reserve2
-            );
-        }
-
-        uint balance = IERC20(config.eyeToken).balanceOf(address(this));
+        uint256 balance = IERC20(config.eyeToken).balanceOf(address(this));
         require(
             balance >= eyeRequired,
             "EyeVault: insufficient EYE tokens in EyeVault"
@@ -211,9 +191,16 @@ contract EyeVault is Ownable {
             exchangeValue
         );
         // SCX receiver is a Scarcity vault here
-        config.scxToken.transferFrom(msg.sender, config.feeHodler, feeValue);
+        require(
+            config.scxToken.transferFrom(
+                msg.sender,
+                config.feeHodler,
+                feeValue
+            ),
+            "EyeVault: Not enough SCX tokens"
+        );
 
-        uint liquidityCreated = config.tokenPair.mint(address(this));
+        uint256 liquidityCreated = config.tokenPair.mint(address(this));
 
         lockedLP[beneficiary].push(
             LPbatch({
@@ -231,16 +218,21 @@ contract EyeVault is Ownable {
             block.timestamp
         );
 
-        emit TokensTransferred(msg.sender, config.feeHodler, exchangeValue, feeValue);
+        emit TokensTransferred(
+            msg.sender,
+            config.feeHodler,
+            exchangeValue,
+            feeValue
+        );
     }
 
     //send SCX to match with EYE tokens in EyeVault
-    function purchaseLP(uint amount) external {
+    function purchaseLP(uint256 amount) external {
         purchaseLPFor(msg.sender, amount);
     }
 
     function claimLP() external {
-        uint next = queueCounter[msg.sender];
+        uint256 next = queueCounter[msg.sender];
         require(
             next < lockedLP[msg.sender].length,
             "EyeVault: nothing to claim."
@@ -252,9 +244,15 @@ contract EyeVault is Ownable {
         );
         next++;
         queueCounter[msg.sender] = next;
-        uint donation = batch.amount.mul(config.donationShare).div(100);
+        uint256 donation = batch.amount.mul(config.donationShare).div(100);
         batch.claimed = true;
-        emit LPClaimed(msg.sender, batch.amount, block.timestamp, donation, batch.claimed);
+        emit LPClaimed(
+            msg.sender,
+            batch.amount,
+            block.timestamp,
+            donation,
+            batch.claimed
+        );
         require(
             config.tokenPair.transfer(address(0), donation),
             "EyeVault: donation transfer failed in LP claim."
@@ -270,13 +268,11 @@ contract EyeVault is Ownable {
         forceUnlock = true;
     }
 
-    function moveToTreasury(uint amount) external onlyOwner {
-        require(treasury != address(0),'EyeVault: treasury must be set');
+    function moveToTreasury(uint256 amount) external onlyOwner {
+        require(treasury != address(0), "EyeVault: treasury must be set");
         require(
-            amount <= config.eyeToken.balanceOf(address(this)),
+            config.eyeToken.transfer(treasury, amount),
             "EyeVault: EYE amount exceeds balance"
         );
-        
-        config.eyeToken.transfer(treasury, amount);
     }
 }
